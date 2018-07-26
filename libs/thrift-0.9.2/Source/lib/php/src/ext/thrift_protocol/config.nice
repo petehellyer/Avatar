@@ -1,0 +1,22 @@
+#! /bin/sh
+#
+# Created by configure
+
+CXXFLAGS='-I/usr/local/opt/openssl/include -L/usr/local/opt/openssl/lib' \
+LIBS='-lssl -lcrypto -lpthread ' \
+'./configure' \
+'--disable-option-checking' \
+'--prefix=/Users/pjh10/GitHub/Avatar/libs/thrift-0.9.2/build' \
+'--with-boost=/usr/local' \
+'--with-libevent=/usr/local' \
+'CXXFLAGS=-I/usr/local/opt/openssl/include \
+'-L/usr/local/opt/openssl/lib'' \
+'--enable-tests=no' \
+'--cache-file=/dev/null' \
+'--srcdir=.' \
+'LDFLAGS=' \
+'LIBS=-lssl \
+'-lcrypto' \
+'-lpthread' \
+'CPPFLAGS=' \
+"$@"
