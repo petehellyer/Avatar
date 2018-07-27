@@ -6,6 +6,7 @@ import threading
 from scipy.io import savemat
 from subprocess import Popen, STDOUT
 import numpy as np
+
 sys.modules['mtrand'] = np.random.mtrand
 from avatar_interop import AvatarIO
 from thrift.transport import TSocket, TTransport
@@ -22,24 +23,6 @@ from argparse import ArgumentParser
 import pdb
 import tempfile
 
-parser = ArgumentParser(
-    description='Create Server and run model with or without the Unity model'
-)
-# Analysis type
-parser.add_argument(
-    '-behaviour',
-    action='store_true',
-    dest='behaviour',
-    help='Runs the simulation with the Unity interface'
-)
-parser.add_argument(
-    '-homeostasis',
-    action='store_true',
-    dest='homeostasis',
-    help='Runs the simulation with the Unity interface'
-)
-args = parser.parse_args()
-
 
 def str_to_bool(s):
     """
@@ -54,6 +37,7 @@ def str_to_bool(s):
         return False
     else:
         raise ValueError
+
 
 def _numpy_dfun(self, state_variables, coupling, local_coupling=0.0):
     r"""
@@ -87,7 +71,6 @@ def _numpy_dfun(self, state_variables, coupling, local_coupling=0.0):
     # !!!! make sure that where current state is 0, the derivative cant possibly be anything other than zero....
     # todo: if this were less of a hack, that would be nice....
     dS[S == 0] = 0
-
 
     derivative = np.array([dS])
 
@@ -129,13 +112,6 @@ class ExtendedSimulator(simulator.Simulator):
         self.nodes_col_L = 21 + 33
         self.nodes_col_R_DMN = 22
         self.nodes_col_L_DMN = 22 + 33
-        print 'TP  nodes are:'
-        print 'visual: %d and %d' %(self.nodes_vis_R, self.nodes_vis_L)
-        print '   col: %d and %d' %(self.nodes_col_R, self.nodes_col_R)
-        print 'DMN nodes are:'
-        print 'visual: %d and %d' %(self.nodes_vis_R_DMN, self.nodes_vis_L_DMN)
-        print '   Col: %d and %d' %(self.nodes_col_R_DMN, self.nodes_col_L_DMN)
-
 
         self.vis_L = False
         self.vis_R = False
@@ -172,7 +148,6 @@ class ExtendedSimulator(simulator.Simulator):
         local_coupling = self._prepare_local_coupling()
         stimulus = self._prepare_stimulus()
 
-
         # check if time point has already been defined (e.g. by loading a pickle). If no previous time points are present
         # start the simulation from zero, otherwise start from the saved time point.
         if not hasattr(self.model, 't'):
@@ -191,7 +166,8 @@ class ExtendedSimulator(simulator.Simulator):
                 # needs implementing by hsitory + coupling?
                 node_coupling = self._loop_compute_node_coupling(self.model.t)
                 self._loop_update_stimulus(self.model.t, stimulus)
-                next_state = self.integrator.scheme(self.current_state, self.model.dfun, node_coupling, local_coupling, stimulus)
+                next_state = self.integrator.scheme(self.current_state, self.model.dfun, node_coupling, local_coupling,
+                                                    stimulus)
                 # bound next_state between 0 and 1
                 next_state[next_state < 0] = 0
                 next_state[next_state > 1] = 1
@@ -201,7 +177,7 @@ class ExtendedSimulator(simulator.Simulator):
                     self.current_state = next_state
                     yield output
                 self.model.t += 1
-        print 'Finished Simulation'
+        print('Finished Simulation')
 
     def run(self, **kwds):
         # Extend Simulator to expose bits we actually want from the integrator.
@@ -216,13 +192,12 @@ class ExtendedSimulator(simulator.Simulator):
             for tl, xl, t_x in zip(ts, xs, data):
                 if t_x is not None:
                     t, x = t_x  # <------ THIS RIGHT HERE IS THE CURRENT STATE
-                    # only run homeostatic rule when passed as parameter
-                    if args.homeostasis:
-                        _x = np.reshape(x, self.model.w.shape)
-                        # _w = self.model.alpha * (_x - self.model.target) * 1e05
-                        _w = self.model.alpha * (_x - self.model.target)
-                        self.model.w = self.model.w - _w
-                        self.model.w[self.model.w < 0] = 0  # heaviside this
+
+                    _x = np.reshape(x, self.model.w.shape)
+                    # _w = self.model.alpha * (_x - self.model.target) * 1e05
+                    _w = self.model.alpha * (_x - self.model.target)
+                    self.model.w = self.model.w - _w
+                    self.model.w[self.model.w < 0] = 0  # heaviside this
 
                     if self.model.DMN:
                         if self.vis_L:
@@ -252,7 +227,7 @@ class ExtendedSimulator(simulator.Simulator):
                 self.fwd += (float(self.model.h[self.nodes_FWD_R] * 100)) * self.model.fwdmod
 
                 # rotation
-                self.rot +=   (float(self.model.h[self.nodes_ROT_L] * 900)) * self.model.rotmod
+                self.rot += (float(self.model.h[self.nodes_ROT_L] * 900)) * self.model.rotmod
                 self.rot += - (float(self.model.h[self.nodes_ROT_R] * 900)) * self.model.rotmod
 
                 rot.append(self.rot)
@@ -262,7 +237,6 @@ class ExtendedSimulator(simulator.Simulator):
 
                 self.next_unity_condition = False
                 self.next_simulation += 1
-
 
         for i in range(len(ts)):
             ts[i] = np.array(ts[i])
@@ -275,9 +249,9 @@ class ExtendedSimulator(simulator.Simulator):
         return ts, xs, hs, data, rot, fwd, posx, posz, ws
 
 
-class ModelThread(threading.Thread):
-    def __init__(self, savename, target, alpha, behaviour,G,
-            initial_conditions, event, DMN, DMN_visual, TP_visual):
+class ModelThread(threading.Thread): # this thread actually runs the model
+    def __init__(self, savename, target, alpha, behaviour, G,
+                 initial_conditions, event, DMN, DMN_visual, TP_visual):
         super(ModelThread, self).__init__()
         self.savename = savename
         ml = scmat.loadmat('Human_66.mat')
@@ -305,7 +279,7 @@ class ModelThread(threading.Thread):
             connectivity=conn,
             coupling=coupling.Linear(a=G),
             integrator=integrators.EulerStochastic(dt=1,
-                noise=noise.Additive(nsig=noise_i, random_stream=my_rng)),
+                                                   noise=noise.Additive(nsig=noise_i, random_stream=my_rng)),
             monitors=monitors.TemporalAverage(),
             simulation_length=3e4).configure()  # todo: make this less idiotic somehow... - maybe refactor up the code
 
@@ -321,21 +295,19 @@ class ModelThread(threading.Thread):
         os.kill(os.getpid(), signal.SIGINT)
 
 
+class AvatarIOHandler(object): # THIS IS THE KEY TO EVERYTHING!
 
-class AvatarIOHandler(object):
     def __init__(self, savename, alpha, target, behaviour, G, event, DMN,
-            initial_condition, DMN_visual, TP_visual):
-        if behaviour:
-            print("G:%s, Alpha:%s, Target:%s, Name:%s" % (G, alpha, target, savename))
-            print("Behaviour will be assessed with Unity")
-        else:
-            print("G:%s, Name:%s" % (G, savename))
+                 initial_condition, DMN_visual, TP_visual):
+
         initial_conditions = np.ones((1, 1, 66, 1)) * initial_condition
 
         self.model = ModelThread(savename, target, alpha, behaviour, G,
-                initial_conditions, event, DMN, DMN_visual, TP_visual)
+                                 initial_conditions, event, DMN, DMN_visual, TP_visual)
         self.model.daemon = True  # make it a daemon!
         self.model.start()  # start the computational model!
+
+    # from here on down, this handles the conditions of the IO handl
 
     def RewardSignal(self, sig):
         self.PrintStatic('RewardSignal(%s)' % sig)
@@ -430,6 +402,7 @@ class AvatarIOHandler(object):
         self.model.sim.next_unity_condition = condition
         return condition
 
+
 class AvatarThread(threading.Thread):  # create a thread for the unity model.
     def __init__(self, event, port=None):
         super(AvatarThread, self).__init__()
@@ -464,7 +437,7 @@ class AvatarThread(threading.Thread):  # create a thread for the unity model.
             # command line option.
         else:
             raise IOError('The unity app %s is not availiable for this \
-                          platform or its path is incorrect' %app)
+                          platform or its path is incorrect' % app)
 
         # os.system(runtime)
         print '\n'  # runtime
@@ -500,8 +473,9 @@ class TSimpleServer(TServer.TSimpleServer):
             otrans.close()
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # I think this should be a seperate script, to be honest so it can simply call a class that runs this shit.
 
+    # here's some settings that ight be over-written by env variables.
     savename = 'tmp_optimal.mat'
     target = 0.25
     alpha = .0000175
@@ -512,6 +486,8 @@ if __name__ == '__main__':
     # Those nodes correpond to DMN nodes on empirical data
     DMN_visual = 9
     TP_visual = 20
+    behaviour = True
+    autorun = True  # automatically start the Unity Daemon
 
     # Get variables from bash
     if "AVATAR_SAVENAME" in os.environ:
@@ -532,68 +508,52 @@ if __name__ == '__main__':
         DMN_visual = int(os.getenv("AVATAR_DMN_VISUAL"))
     if "AVATAR_TP_VISUAL" in os.environ:
         TP_visual = int(os.getenv("AVATAR_TP_VISUAL"))
+    if "AVATAR_BEHAVIOUR" in os.environ:
+        behavior = str_to_bool(os.getenv("AVATAR_BEHAVIOR"))
+    if "AVATAR_UNITY_AUTORUN" in os.environ:
+        autorun = str_to_bool(os.getenv('AVATAR_UNITY_AUTORUN'))
 
     # instantiate event that will signal the communcation between processes
     event = threading.Event()
 
-    if args.homeostasis:
-        print "\nSimulating with Homeostatic Rule"
-    else:
-        print "\nSimulating without Homeostatic Rule"
+    handler = AvatarIOHandler(savename, alpha, target, behaviour, G,
+                              event, DMN, initial_condition, DMN_visual, TP_visual)  # create thread for Avatar IO.
+    processor = AvatarIO.Processor(handler)
 
-    # in case the behaviour flag is active run the Unity thread
-    if args.behaviour:
-        print "\nSimulating Behaviour"
-        handler = AvatarIOHandler(savename, alpha, target, args.behaviour, G,
-                event, DMN, initial_condition, DMN_visual, TP_visual)  # create thread for Avatar IO.
-        processor = AvatarIO.Processor(handler)
+    if behaviour:
+        print("\n Using Unity interactions.")
 
         unity = None
         # Run unity with Graphics interface if AVATAR_NOUNITY is true (n.b. you
         # need to compile without clickling headless)
-        if not str_to_bool(os.getenv('AVATAR_NOUNITY')):
-            # Lazilly create thread for Unity Avatar
-            # create temporary file to use as socket for communication with unity. Note, this ONLY works on UNIX systems...... For now.....
+        if autorun:  # by default we'll spawn our own unity model, but if we don't listen on port 9090
+            #  Generate a UNIX socket for the Avatar to Communicate on.
             f = "/tmp/Avatar_%s" % next(tempfile._get_candidate_names())
-            print "\nSocket name %s" % f
+            print("\nSocket name %s" % f)
             unity = AvatarThread(event, port=f)
             unity.daemon = True  # make it a daemon!
             unity.start()  # start the unity thread
             transport = TSocket.TServerSocket(unix_socket=f)
         else:
             transport = TSocket.TServerSocket(port=9090)
-            print "Using port 9090"
+            print("Using port 9090")
 
         tfactory = TTransport.TBufferedTransportFactory()
         pfactory = TBinaryProtocol.TBinaryProtocolFactory()
 
         server = TSimpleServer(processor, transport, tfactory, pfactory)
 
-        print "\nStarting python server..."
+        print("\nStarting python server...")
         try:
             server.serve()
         except KeyboardInterrupt:
-            if unity is not None:  # try and terminate unity if it's open., almost certainly a neater way to do this exists..
-                print 'Terminating Unity'
+            if unity is not None:  # try and terminate unity if it's open, and keyboard operation happens.
+                print('Terminating Unity')
                 unity.sub.terminate()
             exit()
     else:
-        print "\nSimulating without the behaviour"
-        handler = AvatarIOHandler(savename, alpha, target, args.behaviour, G,
-                event, DMN, initial_condition, DMN_visual, TP_visual)  # create thread for Avatar IO.
-        processor = AvatarIO.Processor(handler)
-        f = "/tmp/Avatar_%s" % next(tempfile._get_candidate_names())
-        print "/nSocket name %s" % f
-        transport = TSocket.TServerSocket(unix_socket=f)
-        tfactory = TTransport.TBufferedTransportFactory()
-        pfactory = TBinaryProtocol.TBinaryProtocolFactory()
-
-        server = TServer.TSimpleServer(processor, transport, tfactory, pfactory)
-
-        print "\nStarting python server..."
         try:
-            server.serve()
+            print("\nSimulating without behavioural model")
+        # You'll note that AvatarIOHandler is already running, so there's absolutely no need to do anything but wait here!
         except KeyboardInterrupt:
-            print "Terminating"
-
-
+            print("Terminating")
