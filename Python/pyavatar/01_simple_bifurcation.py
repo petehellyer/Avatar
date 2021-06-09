@@ -8,7 +8,7 @@ from tvb.simulator import monitors
 from tvb.datatypes import connectivity
 from tvb.simulator import noise
 from Python.pyavatar.virtualbrain import ExtReducedWongWang
-from tvb.simulator.models import ReducedWongWang
+from tvb.simulator.models import ReducedWongWang, WilsonCowan
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
